@@ -4,12 +4,6 @@ A minimal repository for testing [Rego](https://www.openpolicyagent.org/docs/pol
 policies and publishing them to Plural with
 [Terraform](https://github.com/pluralsh/terraform-provider-plural).
 
-The included workbench policy denies Kubernetes deletes in the `kube-system`
-namespace unless the actor belongs to the `sre` group. It also automatically
-approves Kubernetes updates by SREs outside `kube-system`. A binding policy
-automatically attaches these guardrails to workbenches whose names begin with
-`demo-`.
-
 ## Repository layout
 
 ```text
@@ -20,10 +14,14 @@ automatically attaches these guardrails to workbenches whose names begin with
 │   │   ├── demo_workbenches.rego
 │   │   └── demo_workbenches_test.rego
 │   └── workbench/
-│       ├── deny_kube_system_deletes.rego
-│       └── deny_kube_system_deletes_test.rego
-└── terraform/main.tf
+│       ├── kubernetes_guardrails.rego
+│       └── kubernetes_guardrails_test.rego
+└── terraform/
+    ├── main.tf
+    └── policies -> ../policies
 ```
+
+This is a pretty straightforward policy set just for demo purposes.  Workbench policies enforce workbench tool access, while binding policies automate the attachment of policies to Plural object's like workbenches or stacks. In all it should provide a scalable foundation for authorizing tool use and even automating approvals throughout your use of Plural's agentic solutions.
 
 ## Policy format
 
@@ -79,10 +77,8 @@ beside each policy and end in `_test.rego`.
 
 ## Deploy as a Plural stack
 
-The configuration in `terraform/main.tf` loads the Rego files and creates the
-workbench policy, binding policy, and binding. The recommended deployment is an
-`InfrastructureStack`, which gives the Terraform configuration managed state,
-plans, approvals, and Plural credentials at runtime.
+The Terraform configuration creates the policies and binding. Deploy it as an
+`InfrastructureStack` so Plural can manage it.  Note we symlink policies into the `terraform` directory since plural only delivers the `spec.git.folder` subdir to terraform to use.
 
 Create or reuse `GitRepository` and `Cluster` resources, then point an
 `InfrastructureStack` at this repository's `terraform` directory:
@@ -106,24 +102,13 @@ spec:
   type: TERRAFORM
   approval: true
   manageState: true
-  repositoryRef:
-    name: policy-examples
-    namespace: infra
-  clusterRef:
-    name: mgmt
-    namespace: infra
+  actor: console@plural.sh  # leverages built in plural provider auth
+  cluster: mgmt
   git:
+	url: https://github.com/your-org/policy-examples.git
     ref: main
     folder: terraform
 ```
-
-Replace the repository URL and `clusterRef` with resources from your management
-cluster. The stack runner supplies `PLURAL_CONSOLE_URL` and
-`PLURAL_ACCESS_TOKEN`; do not commit them to Terraform variables or manifests.
-
-The example looks up the Plural project named `default`. Change the
-`plural_project` data source in `terraform/main.tf` if the policies belong to
-another project. The binding is reconciled hourly.
 
 ## Add another policy
 
