@@ -18,7 +18,7 @@ data "plural_project" "project" {
 resource "plural_policy" "deny_kube_system_deletes" {
   name        = "deny-kube-system-deletes"
   type        = "WORKBENCH"
-  description = "Prevents workbench agents from deleting Kubernetes resources in kube-system."
+  description = "Guards Kubernetes deletes and automatically approves safe SRE updates."
   project_id  = data.plural_project.project.id
   policy      = file("${path.module}/../policies/workbench/deny_kube_system_deletes.rego")
 }
@@ -39,7 +39,10 @@ resource "plural_binding_policy" "deny_kube_system_deletes_for_demos" {
 
   matches = {
     workbench = {
-      regexes = ["^delete_k8s_resource$"]
+      regexes = [
+        "^delete_k8s_resource$",
+        "^update_k8s_resource$",
+      ]
     }
   }
 }

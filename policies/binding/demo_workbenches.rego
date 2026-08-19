@@ -1,5 +1,5 @@
 package plrl.binding
 
 bind if {
-	startswith(input.name, "demo-")
+	startswith(input.workbench.name, "demo-")
 }

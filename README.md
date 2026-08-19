@@ -5,8 +5,10 @@ policies and publishing them to Plural with
 [Terraform](https://github.com/pluralsh/terraform-provider-plural).
 
 The included workbench policy denies Kubernetes deletes in the `kube-system`
-namespace. A binding policy automatically attaches it to workbenches whose
-names begin with `demo-`.
+namespace unless the actor belongs to the `sre` group. It also automatically
+approves Kubernetes updates by SREs outside `kube-system`. A binding policy
+automatically attaches these guardrails to workbenches whose names begin with
+`demo-`.
 
 ## Repository layout
 
@@ -32,19 +34,24 @@ to either the `deny` or `approve` set:
 package plrl.wb.admission
 
 deny[{"msg": "a useful reason for the denial"}] if {
-	input.input.some_field == "some-value"
+	input.tool_name == "some_tool"
+	input.tool.some_field == "some-value"
 }
 ```
 
-Plural passes workbench tool arguments under `input.input`. It may also provide
-the current user under `input.actor`. Any value added to `deny` blocks the tool
-call. Denials must be objects with a `msg` string, which Plural presents as the
-reason. Values added to `approve` require an approval before the tool runs.
+Plural provides:
 
-The example policy is attached only to the workbench `delete_k8s_resource`
-tool. The Terraform binding uses the tool match expression
-`^delete_k8s_resource$`. Tool matching determines when a policy runs; the Rego
-file receives the tool arguments, not the tool name.
+- `input.tool_name`: the name of the tool being evaluated
+- `input.tool`: the tool arguments
+- `input.actor`: the current user, including a `groups` array when available
+
+Any value added to `deny` blocks the tool call. Denials must contain a `msg`
+string. Values added to `approve` automatically approve tools that support
+approval and use the decision's `reason` in the audit trail.
+
+The example explicitly checks `delete_k8s_resource` and
+`update_k8s_resource`. The Terraform binding includes both exact tool-name
+matches so the policy is evaluated for both operations.
 
 ### Binding policies
 
@@ -55,7 +62,7 @@ workbench itself:
 package plrl.binding
 
 bind if {
-	startswith(input.name, "demo-")
+	startswith(input.workbench.name, "demo-")
 }
 ```
 
@@ -64,52 +71,59 @@ true result attaches the associated workbench policy; a false result removes
 it. The Terraform `plural_binding_policy` resource connects the workbench
 policy, binding policy, and tool match expressions.
 
-## Test policies locally
+## Test policies
 
-Install the [OPA CLI](https://www.openpolicyagent.org/docs/latest/#running-opa)
-and run:
+See [`.github/workflows/test.yaml`](.github/workflows/test.yaml) for the OPA
+version, formatting check, and test command used by this repository. Tests live
+beside each policy and end in `_test.rego`.
 
-```sh
-opa fmt --fail policies
-opa test --verbose policies
+## Deploy as a Plural stack
+
+The configuration in `terraform/main.tf` loads the Rego files and creates the
+workbench policy, binding policy, and binding. The recommended deployment is an
+`InfrastructureStack`, which gives the Terraform configuration managed state,
+plans, approvals, and Plural credentials at runtime.
+
+Create or reuse `GitRepository` and `Cluster` resources, then point an
+`InfrastructureStack` at this repository's `terraform` directory:
+
+```yaml
+apiVersion: deployments.plural.sh/v1alpha1
+kind: GitRepository
+metadata:
+  name: policy-examples
+  namespace: infra
+spec:
+  url: https://github.com/your-org/policy-examples.git
+---
+apiVersion: deployments.plural.sh/v1alpha1
+kind: InfrastructureStack
+metadata:
+  name: policy-examples
+  namespace: infra
+spec:
+  name: policy-examples
+  type: TERRAFORM
+  approval: true
+  manageState: true
+  repositoryRef:
+    name: policy-examples
+    namespace: infra
+  clusterRef:
+    name: mgmt
+    namespace: infra
+  git:
+    ref: main
+    folder: terraform
 ```
 
-Tests live beside each policy and end in `_test.rego`. Add both denied and
-allowed cases whenever a policy changes.
-
-## Publish policies with Terraform
-
-The configuration in `terraform/main.tf` uses the `plural_policy` resource and
-loads the Rego source directly from `policies/`. Authenticate with environment
-variables so credentials do not enter Terraform source or variable files:
-
-```sh
-export PLURAL_CONSOLE_URL="https://console.example.com"
-export PLURAL_ACCESS_TOKEN="..."
-
-terraform -chdir=terraform init
-terraform -chdir=terraform fmt -check
-terraform -chdir=terraform plan
-terraform -chdir=terraform apply
-```
-
-The access token needs permission to manage policies in the selected project.
-For local use, the provider can alternatively read credentials from `plural cd
-login` by setting `PLURAL_USE_CLI=true`.
+Replace the repository URL and `clusterRef` with resources from your management
+cluster. The stack runner supplies `PLURAL_CONSOLE_URL` and
+`PLURAL_ACCESS_TOKEN`; do not commit them to Terraform variables or manifests.
 
 The example looks up the Plural project named `default`. Change the
-`plural_project` data source if policies belong to another project. Terraform
-creates both policies and reconciles the workbench attachments hourly. Before
-using this repository with a team, configure a remote Terraform backend so
-state is shared and protected.
-
-## CI
-
-`.github/workflows/test.yaml` runs on every pull request and on pushes to
-`main`. It checks Rego formatting and runs all OPA tests.
-
-CI does not apply Terraform and therefore needs no Plural credentials. Apply
-from your normal infrastructure delivery workflow after review.
+`plural_project` data source in `terraform/main.tf` if the policies belong to
+another project. The binding is reconciled hourly.
 
 ## Add another policy
 
@@ -119,4 +133,5 @@ from your normal infrastructure delivery workflow after review.
    reads the new file.
 4. Reuse or add a policy under `policies/binding/`, then connect the two with a
    `plural_binding_policy` resource and the appropriate tool regexes.
-5. Run the OPA and Terraform checks locally.
+5. Add denied, allowed, and approval cases to the policy tests; use the
+   repository workflow as the source of truth.
