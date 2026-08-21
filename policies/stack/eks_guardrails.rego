@@ -1,4 +1,4 @@
-package plrl.stack.approval
+package plrl.stack
 
 # Auto-approves when the plan neither destroys/replaces the EKS cluster or node
 # groups nor changes aws_eks_cluster.version. Unsafe plans are left undecided:

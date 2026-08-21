@@ -78,7 +78,7 @@ policy, binding policy, and tool match expressions.
 
 ### Stack policies
 
-Plural stack policies use the `plrl.stack.approval` package. They receive a
+Plural stack policies use the `plrl.stack` package. They receive a
 reduced Terraform plan plus stack and actor metadata:
 
 - `input.plan.resource_changes`: address, type, name, provider, and `change.{actions, before, after}`
@@ -136,7 +136,7 @@ spec:
 ## Add another policy
 
 1. Add `policies/workbench/<name>.rego` using the `plrl.wb.admission` package,
-   or `policies/stack/<name>.rego` using `plrl.stack.approval`.
+   or `policies/stack/<name>.rego` using `plrl.stack`.
 2. Add a matching `*_test.rego` with denied, allowed, and approval cases.
 3. Add another `plural_policy` resource in `terraform/workbench.tf` or
    `terraform/stack.tf` whose `policy` reads the new file (`WORKBENCH` or `STACK`).

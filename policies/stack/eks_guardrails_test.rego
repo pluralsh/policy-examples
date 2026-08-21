@@ -1,4 +1,4 @@
-package plrl.stack.approval
+package plrl.stack
 
 eks_cluster(actions, before, after) := {
 	"address": "module.eks.aws_eks_cluster.this[0]",
