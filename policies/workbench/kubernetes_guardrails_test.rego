@@ -30,6 +30,36 @@ test_allows_sre_delete_in_kube_system if {
 	}
 }
 
+test_denies_sre_delete_in_plrl_console if {
+	deny[{"msg": "deleting resources in protected Plural namespaces is not allowed"}] with input as {
+		"tool_name": "delete_k8s_resource",
+		"tool": {
+			"cluster": "production",
+			"kind": "Deployment",
+			"name": "console",
+			"namespace": "plrl-console",
+		},
+		"actor": {
+			"groups": ["developers", "sre"],
+		},
+	}
+}
+
+test_denies_sre_delete_in_plrl_deploy_operator if {
+	deny[{"msg": "deleting resources in protected Plural namespaces is not allowed"}] with input as {
+		"tool_name": "delete_k8s_resource",
+		"tool": {
+			"cluster": "production",
+			"kind": "Deployment",
+			"name": "deploy-operator",
+			"namespace": "plrl-deploy-operator",
+		},
+		"actor": {
+			"groups": ["developers", "sre"],
+		},
+	}
+}
+
 test_allows_delete_outside_kube_system if {
 	count(deny) == 0 with input as {
 		"tool_name": "delete_k8s_resource",
